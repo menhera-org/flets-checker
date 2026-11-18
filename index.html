@@ -62,16 +62,49 @@ input, button {
 </head>
 <body>
 <h1>フレッツ光IPv6アドレスチェッカー</h1>
-<p>与えられたIPv6アドレスがフレッツ光のアドレス（東日本/西日本）かどうかと、そのプロバイダ（VNE）を判定します。</p>
+<p>入力したIPv6アドレスがフレッツ光・光コラボのアドレスかどうかを調べ、NTT東日本・西日本の区別と、利用しているVNEを表示します。</p>
+<p>VNEは、IPv6のIPoE接続を提供する事業者です。このツールでは、ネットワークの情報からVNEを推定します。契約先のプロバイダーや料金プランまでは特定できません。</p>
 <div id="input-fields">
-    <input id="ipaddr" type="text" autocomplete="off" required>
+    <label for="ipaddr">調べたいIPv6アドレス</label>
+    <input id="ipaddr" type="text" autocomplete="off" aria-describedby="address-help" required>
     <button id="btn-myaddr">自分のアドレスを入力</button>
 </div>
+<p id="address-help">IPv6アドレスだけを入力し、「実行」を押してください。例：<code>2001:db8::1</code>（説明用のアドレス）。<code>/64</code>などのプレフィックス長、角括弧、<code>%eth0</code>などのゾーン識別子は付けません。</p>
+<p>「自分のアドレスを入力」を押すと、IPv6接続で確認した接続元アドレスを入力できます。その後に「実行」を押してください。アドレスの自動取得にはIPv6で通信できる環境が必要です。</p>
 <div id="execution">
     <button id="btn-run">実行</button>
 </div>
 <div id="error"></div>
 <div id="result"></div>
+<section aria-labelledby="result-help">
+<h2 id="result-help">結果の見方</h2>
+<dl>
+    <dt>フレッツ光の区別</dt>
+    <dd>NGN照会APIによるNTT東日本・西日本の判定です。光コラボの回線も含みます。</dd>
+    <dt>VNE</dt>
+    <dd>ASNと、このツールの対応表から推定した事業者名です。対応表は、2026年11月18日時点のすべてのVNEを網羅しています。ASNを取得できない場合や、取得したASNをVNEに対応付けられない場合は、「不明なVNE」と表示されます。</dd>
+    <dt>NGNプレフィックス</dt>
+    <dd>NGN照会APIが返したアドレス範囲です。NGNは、フレッツ光で使われるNTTの次世代ネットワークを指します。</dd>
+    <dt>ASN</dt>
+    <dd>BGPの経路情報で使われるネットワークの識別番号です。このツールでは、RIPEstatの照会結果のうち先頭のASNを表示します。</dd>
+    <dt>ネットワーク名</dt>
+    <dd>RIPEstatが返したASNの登録組織名です。契約先のプロバイダー名と一致するとは限りません。</dd>
+    <dt>BGPプレフィックス</dt>
+    <dd>RIPEstatで見つかった経路のアドレス範囲です。NGNプレフィックスとは範囲が異なる場合があります。</dd>
+</dl>
+<p>ASNとBGPプレフィックスは、NGNプレフィックスの先頭アドレスをRIPEstatに照会して取得します。NGNプレフィックスがない場合は、入力したアドレスを照会します。</p>
+<p>この判定は、照会先のデータと、このツールの対応表に基づきます。通信速度や接続の正常性、IPv4 over IPv6の利用状況を確認するものではありません。</p>
+</section>
+<section aria-labelledby="external-services">
+<h2 id="external-services">外部サービスへの照会</h2>
+<p>「実行」を押すと、入力したアドレスを<a href="https://looking-glass.nc.menhera.org/">NGN照会サービス</a>に送信し、上記の方法で<a href="https://stat.ripe.net/">RIPEstat</a>にも照会します。「自分のアドレスを入力」では、<a href="https://v6.ip.menhera.org/">IPv6アドレス確認サービス</a>に接続します。</p>
+<p>外部サービスに接続できない場合は、エラーが表示されたり、一部の情報を取得できなかったりします。ASNの<code>AS0</code>とBGPプレフィックスの<code>?</code>は、情報を取得できなかった場合の表示です。</p>
+</section>
+<footer>
+<hr>
+<p><a href="https://www.menhera.or.jp/">一般社団法人生活情報基盤研究機構 (Menhera®)</a></p>
+<p>License: Apache-2.0 OR MPL-2.0. <a href="https://github.com/menhera-org/flets-checker">GitHub</a></p>
+</footer>
 <script>
 const ipaddr = document.getElementById('ipaddr');
 
@@ -193,6 +226,10 @@ buttonRun.onclick = async () => {
         let vneName = '（フレッツ光でないため非該当）';
         if (fletsState > 0) {
             vneName = asnToVne(asn);
+        }
+
+        if (ngnPrefix != '' && !ngnData?.is_vne) {
+            vneName = '（網内折り返し通信専用アドレス、インターネットからアクセス不可）';
         }
 
         let fletsName = '（フレッツ光・コラボ光以外）';
