@@ -52,6 +52,8 @@ input, button {
 
 #result > table :is(th, td) {
     border: solid 0.0625rem #666;
+    padding-inline: 1rem;
+    padding-block: .5rem;
 }
 
 #result > table th {
@@ -69,11 +71,11 @@ input, button {
     <input id="ipaddr" type="text" autocomplete="off" aria-describedby="address-help" required>
     <button id="btn-myaddr">自分のアドレスを入力</button>
 </div>
-<p id="address-help">IPv6アドレスだけを入力し、「実行」を押してください。例：<code>2001:db8::1</code>（説明用のアドレス）。<code>/64</code>などのプレフィックス長、角括弧、<code>%eth0</code>などのゾーン識別子は付けません。</p>
-<p>「自分のアドレスを入力」を押すと、IPv6接続で確認した接続元アドレスを入力できます。その後に「実行」を押してください。アドレスの自動取得にはIPv6で通信できる環境が必要です。</p>
 <div id="execution">
     <button id="btn-run">実行</button>
 </div>
+<p id="address-help">IPv6アドレスだけを入力し、「実行」を押してください。</p>
+<p>「自分のアドレスを入力」を押すと、IPv6接続で確認した接続元アドレスを入力できます。その後に「実行」を押してください。アドレスの自動取得にはIPv6で通信できる環境が必要です。</p>
 <div id="error"></div>
 <div id="result"></div>
 <section aria-labelledby="result-help">

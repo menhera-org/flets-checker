@@ -48,13 +48,3 @@ VNEの対応表は、2026年11月18日時点のすべてのVNEを網羅してい
 画面、スタイル、判定処理、ASNとVNEの対応表は、すべて`index.html`にあります。対応するVNEを更新するときは、`asnToVne`を編集します。
 
 IPv6入力の正規表現は、[RFC 3986 §3.2.2](https://www.rfc-editor.org/rfc/rfc3986#section-3.2.2)の`IPv6address`の文法に基づきます。[RFC 4291 §2.2](https://www.rfc-editor.org/rfc/rfc4291#section-2.2)の通常表記、省略表記、IPv4を含む表記を扱います。
-
-## 入力検証のテスト
-
-Dockerが使える環境では、リポジトリのルートで次を実行できます。Node.jsは使い捨てのコンテナー内だけで実行します。
-
-```sh
-docker run --rm --network none -v "$PWD:/work:ro" -w /work node:24-alpine node tests/ipv6.test.mjs
-```
-
-テストは、実際のページ内スクリプトから入力用の正規表現を取得し、正常・異常なアドレスと必須入力の指定を確認します。外部APIへの通信や画面表示は検証しません。
