@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>フレッツ光IPv6アドレスチェッカー</title>
+<style>
+body {
+    padding-inline: 1rem;
+    margin-inline: auto;
+    max-inline-size: 48rem;
+    margin-block: 2rem;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+input, button {
+    font: inherit;
+    min-inline-size: 0;
+    display: block;
+}
+
+#input-fields {
+    display: flex;
+    flex-direction: row;
+    max-inline-size: 32rem;
+    margin-inline: auto;
+}
+
+#ipaddr {
+    flex: 1;
+}
+
+#btn-run {
+    margin-inline: auto;
+}
+
+#error {
+    color: red;
+    font-family: monospace;
+}
+
+#result > progress {
+    margin-inline: auto;
+    display: block;
+}
+
+#result > table {
+    border-spacing: 0;
+    border-collapse: collapse;
+    min-inline-size: 0;
+    inline-size: 100%;
+}
+
+#result > table :is(th, td) {
+    border: solid 0.0625rem #666;
+}
+
+#result > table th {
+    font-weight: bold;
+    background-color: #eee;
+}
+</style>
+</head>
+<body>
+<h1>フレッツ光IPv6アドレスチェッカー</h1>
+<p>与えられたIPv6アドレスがフレッツ光のアドレス（東日本/西日本）かどうかと、そのプロバイダ（VNE）を判定します。</p>
+<div id="input-fields">
+    <input id="ipaddr" type="text" autocomplete="off" required>
+    <button id="btn-myaddr">自分のアドレスを入力</button>
+</div>
+<div id="execution">
+    <button id="btn-run">実行</button>
+</div>
+<div id="error"></div>
+<div id="result"></div>
+<script>
+const ipaddr = document.getElementById('ipaddr');
+
+// RFC 3986 section 3.2.2: IPv6address (the text forms in RFC 4291 section 2.2).
+const h16 = '[0-9A-Fa-f]{1,4}';
+const decOctet = '(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9][0-9]|[0-9])';
+const ls32 = `(?:${h16}:${h16}|(?:${decOctet}[.]){3}${decOctet})`;
+ipaddr.pattern = [
+    `(?:${h16}:){6}${ls32}`,
+    `::(?:${h16}:){5}${ls32}`,
+    `(?:${h16})?::(?:${h16}:){4}${ls32}`,
+    `(?:(?:${h16}:){0,1}${h16})?::(?:${h16}:){3}${ls32}`,
+    `(?:(?:${h16}:){0,2}${h16})?::(?:${h16}:){2}${ls32}`,
+    `(?:(?:${h16}:){0,3}${h16})?::${h16}:${ls32}`,
+    `(?:(?:${h16}:){0,4}${h16})?::${ls32}`,
+    `(?:(?:${h16}:){0,5}${h16})?::${h16}`,
+    `(?:(?:${h16}:){0,6}${h16})?::`,
+].join('|');
+const buttonMyAddr = document.getElementById('btn-myaddr');
+const buttonRun = document.getElementById('btn-run');
+const error = document.getElementById('error');
+const result = document.getElementById('result');
+
+buttonMyAddr.onclick = async () => {
+    try {
+        const res = await fetch('https://v6.ip.menhera.org/');
+        if (!res.ok) {
+            throw new Error('Request failed');
+        }
+        const json = await res.json();
+        if (json.ip) {
+            ipaddr.value = String(json.ip);
+        }
+    } catch (e) {
+        error.textContent = String(e);
+    }
+};
+
+function asnToVne(asn) {
+    switch (asn) {
+        case '17676':
+            return 'BBIX/ソフトバンク（IPv6高速ハイブリッド、v6IX、OCX光 インターネット）';
+        
+        case '55391':
+        case '55392':
+            return 'インターネットマルチフィード/MFEED（transix）';
+        
+        case '2516':
+            return 'JPIX（旧JPNE、KDDI系）/v6プラス';
+        
+        case '2518':
+            return 'BIGLOBE/IPv6オプション';
+        
+        case '4685':
+            return 'ASAHI-NET/v6 コネクト';
+
+        case '4713':
+            return 'NTTドコモビジネス（OCN）/OCNバーチャルコネクト';
+        
+        case '59125':
+        case '131925':
+            return 'ファミリーネット・ジャパン（IPv6/IPoEサービス）';
+        
+        case '2519':
+            return 'アルテリア・ネットワークス（VECTANT）/クロスパス（Xpass）';
+        
+        case '138384':
+            return '楽天モバイル/IPoE接続サービス';
+        
+        case '63784':
+            return 'デジタル庁/GSSネット';
+        
+        default:
+            return '不明なVNE';
+    }
+}
+
+buttonRun.onclick = async () => {
+    if (!ipaddr.validity.valid) {
+        error.textContent = 'Error: Invalid IPv6 address';
+        return;
+    }
+    try {
+        buttonRun.disabled = true;
+        result.textContent = '';
+        const progress = document.createElement('progress');
+        result.append(progress);
+        const addr = ipaddr.value;
+        const ngnUrl = new URL('https://looking-glass.nc.menhera.org/ngn_query');
+        ngnUrl.searchParams.set('q', addr);
+        const ngnRes = await fetch(ngnUrl);
+        if (!ngnRes.ok) {
+            throw new Error('Failed to get NGN status');
+        }
+        const ngnData = await ngnRes.json();
+        let fletsState = 0;
+        if (ngnData.ngn_region == 'east') {
+            fletsState = 1;
+        } else if (ngnData.ngn_region == 'west') {
+            fletsState = 2;
+        }
+        const ngnPrefix = ngnData?.prefix ?? '';
+        const ngnNetwork = ngnPrefix == '' ? addr : ngnPrefix.split('/')[0];
+
+        const prefixUrl = new URL('https://stat.ripe.net/data/network-info/data.json');
+        prefixUrl.searchParams.set('resource', ngnNetwork);
+        const prefixRes = await fetch(prefixUrl);
+        
+        let asn = '0';
+        let prefix = '?';
+        if (prefixRes.ok) {
+            const prefixData = await prefixRes.json();
+            if (prefixData.data) {
+                asn = (prefixData.data?.asns || [])[0] ?? '0';
+                prefix = prefixData.data?.prefix ?? '?';
+            }
+        }
+
+        let vneName = '（フレッツ光でないため非該当）';
+        if (fletsState > 0) {
+            vneName = asnToVne(asn);
+        }
+
+        let fletsName = '（フレッツ光・コラボ光以外）';
+        if (fletsState == 1) {
+            fletsName = 'NTT東日本（コラボ光含む）';
+        } else if (fletsState == 2) {
+            fletsName = 'NTT西日本（コラボ光含む）';
+        }
+
+        const asnUrl = `https://stat.ripe.net/data/as-overview/data.json?resource=AS${asn}`;
+        const asnRes = await fetch(asnUrl);
+        let asName = '不明なAS';
+        if (asnRes.ok) {
+            const asnData = await asnRes.json();
+            if (asnData?.data?.holder) {
+                asName = String(asnData?.data?.holder);
+            }
+        }
+
+        const table = document.createElement('table');
+        const tbody = document.createElement('tbody');
+        const row1 = document.createElement('tr');
+        {
+            const th = document.createElement('th');
+            th.textContent = 'フレッツ光の区別';
+            const td = document.createElement('td');
+            td.textContent = fletsName;
+            row1.append(th, td);
+        }
+        const row2 = document.createElement('tr');
+        {
+            const th = document.createElement('th');
+            th.textContent = 'VNE';
+            const td = document.createElement('td');
+            td.textContent = vneName;
+            row2.append(th, td);
+        }
+        const row3 = document.createElement('tr');
+        {
+            const th = document.createElement('th');
+            th.textContent = 'NGNプレフィックス';
+            const td = document.createElement('td');
+            td.textContent = ngnPrefix;
+            row3.append(th, td);
+        }
+        const row4 = document.createElement('tr');
+        {
+            const th = document.createElement('th');
+            th.textContent = 'ASN';
+            const td = document.createElement('td');
+            td.textContent = `AS${asn}`;
+            row4.append(th, td);
+        }
+        const row5 = document.createElement('tr');
+        {
+            const th = document.createElement('th');
+            th.textContent = 'ネットワーク名';
+            const td = document.createElement('td');
+            td.textContent = asName;
+            row5.append(th, td);
+        }
+        const row6 = document.createElement('tr');
+        {
+            const th = document.createElement('th');
+            th.textContent = 'BGPプレフィックス';
+            const td = document.createElement('td');
+            td.textContent = prefix;
+            row6.append(th, td);
+        }
+
+        tbody.append(row1, row2, row3, row4, row5, row6);
+        table.append(tbody);
+        result.textContent = '';
+        result.append(table);
+        error.textContent = '';
+    } catch (e) {
+        result.textContent = '';
+        error.textContent = String(e);
+    } finally {
+        buttonRun.disabled = false;
+    }
+};
+</script>
+</body>
+</html>
